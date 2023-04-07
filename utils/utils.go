@@ -11,6 +11,7 @@ type SteamJob struct {
 type JobStatus struct {
 	State  string   `json:"state"`
 	Result []string `json:"result"`
+	Time   int64    `json:"time"`
 }
 
 type JobStatusEvents []JobStatus

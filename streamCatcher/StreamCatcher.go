@@ -3,7 +3,9 @@ package streamcatcher
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
+	"time"
 
 	"microsomes.com/stgo/streamCatcher/streamutil"
 	"microsomes.com/stgo/utils"
@@ -16,6 +18,15 @@ type StreamCatcher struct {
 	JobStatuses     map[string]utils.JobStatus
 	JobStatusEvents map[string]utils.JobStatusEvents
 	WorkerStatus    utils.WorkerStatus
+}
+
+func (s *StreamCatcher) ShouldAdd(job utils.SteamJob) bool {
+
+	if _, ok := s.JobStatuses[job.JobID]; ok {
+		return false
+	}
+
+	return true
 }
 
 func (s *StreamCatcher) GetWorkerStatus() utils.WorkerStatus {
@@ -46,10 +57,25 @@ func (s *StreamCatcher) AddStatusEvent(job *utils.SteamJob, status string, resul
 	nstatus := utils.JobStatus{
 		State:  status,
 		Result: result,
+		Time:   time.Now().Unix(),
 	}
 
 	if status == "queued" {
 		s.WorkerStatus.TotalQueue++
+	}
+
+	if status == "recording" {
+		s.WorkerStatus.TotalQueue--
+		s.WorkerStatus.TotalRecording++
+	}
+
+	if status == "done" {
+		s.WorkerStatus.TotalRecording--
+		s.WorkerStatus.TotalDone++
+	}
+
+	if status == "error" {
+		s.WorkerStatus.TotalRecording--
 	}
 
 	s.JobStatusEvents[job.JobID] = append(s.JobStatusEvents[job.JobID], nstatus)
@@ -69,12 +95,48 @@ func (s *StreamCatcher) StartWork(wg *sync.WaitGroup) {
 
 	for Job := range s.WorkQueue {
 
+		s.AddStatusEvent(&Job, "recording", []string{})
+
 		data, err := streamutil.ProcessDownload(Job.YoutubeLink, Job.TimeoutSeconds, Job.JobID, Job.IsStart)
 		if err != nil {
 			fmt.Println("Error: ", err)
 			s.AddStatusEvent(&Job, "error", []string{err.Error()})
 		}
 
+		s.AddStatusEvent(&Job, "attempting to upload", data.Paths)
+
+		uploader := streamutil.DLPUploader{}
+
+		for _, path := range data.Paths {
+
+			f, err := os.Open("./tmp/" + path)
+			defer f.Close()
+
+			if err != nil {
+				fmt.Println("Error: ", err)
+				s.AddStatusEvent(&Job, "error uploading:"+path, []string{err.Error()})
+				return
+			}
+
+			err = uploader.UploadFile(f, Job.JobID+".mp4")
+
+			if err != nil {
+				fmt.Println("Error: ", err)
+				s.AddStatusEvent(&Job, "error uploading:"+path, []string{err.Error()})
+				return
+			}
+
+			// remove file
+			err = os.Remove("./tmp/" + path)
+			if err != nil {
+				fmt.Println("Error: ", err)
+				s.AddStatusEvent(&Job, "error removing:"+path, []string{err.Error()})
+				return
+			}
+
+			s.AddStatusEvent(&Job, "uploaded:"+path, []string{})
+
+		}
 		s.AddStatusEvent(&Job, "done", data.Paths)
 
 		fmt.Println("Processed: ", Job.JobID, " done")

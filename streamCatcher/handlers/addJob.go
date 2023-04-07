@@ -10,7 +10,8 @@ import (
 )
 
 type AddJob struct {
-	Callback func(jobDetails utils.SteamJob)
+	Callback  func(jobDetails utils.SteamJob)
+	ShouldAdd func(jobDetails utils.SteamJob) bool
 }
 
 func (a *AddJob) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +37,11 @@ func (a *AddJob) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Println("Job: ", jobDetails.JobID)
+
+	if !a.ShouldAdd(jobDetails) {
+		w.Write([]byte("Job already exists"))
+		return
+	}
 
 	a.Callback(jobDetails)
 

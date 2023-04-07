@@ -36,7 +36,8 @@ func (s *StreamCatcherServer) StartAndServe(wg *sync.WaitGroup, ctx context.Cont
 
 	files := handlers.Files{}
 	addJob := handlers.AddJob{
-		Callback: s.StreamCatcher.AddJob,
+		Callback:  s.StreamCatcher.AddJob,
+		ShouldAdd: s.StreamCatcher.ShouldAdd,
 	}
 
 	jobStatus := handlers.JobStatus{
