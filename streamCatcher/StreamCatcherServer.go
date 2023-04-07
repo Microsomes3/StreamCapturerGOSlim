@@ -58,10 +58,20 @@ func (s *StreamCatcherServer) StartAndServe(wg *sync.WaitGroup, ctx context.Cont
 		},
 	}
 
+	bulkAddJobs := handlers.BulkAddJobs{
+		Callback: s.StreamCatcher.AddJob,
+	}
+
+	bulkStatuses := handlers.BulkStatuses{
+		GetStatusesByJobID: s.StreamCatcher.GetJobStatus,
+	}
+
 	http.HandleFunc("/", files.ServeHTTP)
 	http.HandleFunc("/addJob", addJob.ServeHTTP)
+	http.HandleFunc("/bulkaddJob", bulkAddJobs.ServeHTTP)
 	http.HandleFunc("/drain", drain.ServeHTTP)
 	http.HandleFunc("/jobStatus", jobStatus.ServeHTTP)
+	http.HandleFunc("/bulkStatus", bulkStatuses.ServeHTTP)
 	http.HandleFunc("/workerStatus", workerQueue.ServeHTTP)
 	go s.client.ListenAndServe()
 

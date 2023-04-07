@@ -1,8 +1,11 @@
 package streamcatcher
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -18,6 +21,7 @@ type StreamCatcher struct {
 	JobStatuses     map[string]utils.JobStatus
 	JobStatusEvents map[string]utils.JobStatusEvents
 	WorkerStatus    utils.WorkerStatus
+	GroupLinks      map[string][]string
 }
 
 func (s *StreamCatcher) ShouldAdd(job utils.SteamJob) bool {
@@ -49,7 +53,52 @@ func NewStreamCatcher() *StreamCatcher {
 		JobStatuses:     make(map[string]utils.JobStatus),
 		JobStatusEvents: make(map[string]utils.JobStatusEvents),
 		WorkerStatus:    utils.WorkerStatus{},
+		GroupLinks:      make(map[string][]string),
 	}
+}
+
+type ToSendStatusHook struct {
+	Job    utils.SteamJob
+	Status utils.JobStatus
+}
+
+func (s *StreamCatcher) sendStatusToCallback(job *utils.SteamJob, status utils.JobStatus) {
+	httpclient := http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	statusToSend := ToSendStatusHook{
+		Job:    *job,
+		Status: status,
+	}
+
+	bytet, err := json.Marshal(statusToSend)
+
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", job.UpdateHook, bytes.NewBuffer(bytet))
+
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpclient.Do(req)
+
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	fmt.Println("Response: ", resp.Status)
+
 }
 
 func (s *StreamCatcher) AddStatusEvent(job *utils.SteamJob, status string, result []string) {
@@ -62,6 +111,7 @@ func (s *StreamCatcher) AddStatusEvent(job *utils.SteamJob, status string, resul
 
 	if status == "queued" {
 		s.WorkerStatus.TotalQueue++
+		s.WorkerStatus.TotalDuration += job.TimeoutSeconds
 	}
 
 	if status == "recording" {
@@ -72,6 +122,22 @@ func (s *StreamCatcher) AddStatusEvent(job *utils.SteamJob, status string, resul
 	if status == "done" {
 		s.WorkerStatus.TotalRecording--
 		s.WorkerStatus.TotalDone++
+		s.WorkerStatus.TotalDuration -= job.TimeoutSeconds
+
+		if job.Groupid != "" {
+			s.GroupLinks[job.Groupid] = append(s.GroupLinks[job.Groupid], result...)
+		}
+
+		fmt.Println("Group links: ", s.GroupLinks)
+
+		formatted := []string{}
+
+		for _, link := range s.GroupLinks[job.Groupid] {
+			formatted = append(formatted, "https://pub-cf9c58b47aaa413eadbc9d4fba77649a.r2.dev/"+link)
+		}
+
+		s.GroupLinks[job.Groupid] = formatted
+
 	}
 
 	if status == "error" {
@@ -81,6 +147,8 @@ func (s *StreamCatcher) AddStatusEvent(job *utils.SteamJob, status string, resul
 	s.JobStatusEvents[job.JobID] = append(s.JobStatusEvents[job.JobID], nstatus)
 
 	s.JobStatuses[job.JobID] = nstatus
+
+	s.sendStatusToCallback(job, nstatus)
 
 }
 

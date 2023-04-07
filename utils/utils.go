@@ -1,11 +1,14 @@
 package utils
 
+import "encore.dev/types/uuid"
+
 type SteamJob struct {
 	JobID          string `json:"jobId"`
 	YoutubeLink    string `json:"youtubeLink"`
 	TimeoutSeconds int    `json:"timeout"`
 	IsStart        bool   `json:"isStart"`
 	UpdateHook     string `json:"updateHook"`
+	Groupid        string `json:"groupid"`
 }
 
 type JobStatus struct {
@@ -27,4 +30,12 @@ type WorkerStatus struct {
 	TotalQueue     int `json:"totalQueue"`
 	TotalRecording int `json:"totalRecording"`
 	TotalDone      int `json:"totalDone"`
+	TotalDuration  int `json:"totalDuration"`
+}
+
+func GenerateJobID(tag string) string {
+
+	uid, _ := uuid.NewV4()
+
+	return tag + "_" + uid.String()
 }
