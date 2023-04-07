@@ -9,7 +9,13 @@ import (
 )
 
 type JobStatus struct {
-	GetStatusesByJobID func(id string) utils.JobStatus
+	GetStatusesByJobID    func(id string) utils.JobStatus
+	GetAllStatusesByJobID func(id string) []utils.JobStatus
+}
+
+type JobStatusResponse struct {
+	Current utils.JobStatus   `json:"current"`
+	Events  []utils.JobStatus `json:"events"`
 }
 
 func (j *JobStatus) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -27,14 +33,17 @@ func (j *JobStatus) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := j.GetStatusesByJobID(jobID)
+	currentStatus := j.GetStatusesByJobID(jobID)
+	allStatuses := j.GetAllStatusesByJobID(jobID)
 
-	if status.State == "" {
+	status1 := JobStatusResponse{Current: currentStatus, Events: allStatuses}
+
+	if currentStatus.State == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 
-	json.NewEncoder(w).Encode(status)
+	json.NewEncoder(w).Encode(status1)
 }

@@ -15,10 +15,19 @@ type StreamCatcher struct {
 	ConcurrentLimit int
 	JobStatuses     map[string]utils.JobStatus
 	JobStatusEvents map[string]utils.JobStatusEvents
+	WorkerStatus    utils.WorkerStatus
+}
+
+func (s *StreamCatcher) GetWorkerStatus() utils.WorkerStatus {
+	return s.WorkerStatus
 }
 
 func (s *StreamCatcher) GetJobStatus(id string) utils.JobStatus {
 	return s.JobStatuses[id]
+}
+
+func (s *StreamCatcher) GetAllStatusesByJobID(id string) []utils.JobStatus {
+	return s.JobStatusEvents[id]
 }
 
 func NewStreamCatcher() *StreamCatcher {
@@ -28,6 +37,7 @@ func NewStreamCatcher() *StreamCatcher {
 		ConcurrentLimit: 10,
 		JobStatuses:     make(map[string]utils.JobStatus),
 		JobStatusEvents: make(map[string]utils.JobStatusEvents),
+		WorkerStatus:    utils.WorkerStatus{},
 	}
 }
 
@@ -38,6 +48,10 @@ func (s *StreamCatcher) AddStatusEvent(job *utils.SteamJob, status string, resul
 		Result: result,
 	}
 
+	if status == "queued" {
+		s.WorkerStatus.TotalQueue++
+	}
+
 	s.JobStatusEvents[job.JobID] = append(s.JobStatusEvents[job.JobID], nstatus)
 
 	s.JobStatuses[job.JobID] = nstatus
@@ -46,6 +60,7 @@ func (s *StreamCatcher) AddStatusEvent(job *utils.SteamJob, status string, resul
 
 func (s *StreamCatcher) AddJob(job utils.SteamJob) {
 	fmt.Println("Adding job to job queue: ", job.JobID)
+	s.AddStatusEvent(&job, "queued", []string{})
 	s.JobQueue <- job
 }
 

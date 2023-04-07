@@ -40,7 +40,12 @@ func (s *StreamCatcherServer) StartAndServe(wg *sync.WaitGroup, ctx context.Cont
 	}
 
 	jobStatus := handlers.JobStatus{
-		GetStatusesByJobID: s.StreamCatcher.GetJobStatus,
+		GetStatusesByJobID:    s.StreamCatcher.GetJobStatus,
+		GetAllStatusesByJobID: s.StreamCatcher.GetAllStatusesByJobID,
+	}
+
+	workerQueue := handlers.WorkerStatus{
+		GetWorkerStatus: s.StreamCatcher.GetWorkerStatus,
 	}
 
 	drain := handlers.Drain{
@@ -56,6 +61,7 @@ func (s *StreamCatcherServer) StartAndServe(wg *sync.WaitGroup, ctx context.Cont
 	http.HandleFunc("/addJob", addJob.ServeHTTP)
 	http.HandleFunc("/drain", drain.ServeHTTP)
 	http.HandleFunc("/jobStatus", jobStatus.ServeHTTP)
+	http.HandleFunc("/workerStatus", workerQueue.ServeHTTP)
 	go s.client.ListenAndServe()
 
 	select {
